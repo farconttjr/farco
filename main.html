@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Farco - Games & Messenger</title>
+    <style>
+        body {
+            font-family: "Verdana", sans-serif;
+            background-color: #e0e0e0;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            display: flex;
+            width: 100vw;
+            height: 100vh;
+            box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .sidebar {
+            width: 30%;
+            background-color: #075E54;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            box-shadow: inset -2px 0 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .games {
+            width: 70%;
+            background-color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            box-shadow: inset 2px 0 5px rgba(0, 0, 0, 0.1);
+            align-items: center;
+            justify-content: center;
+        }
+
+        h2 {
+            margin: 0;
+            padding-bottom: 10px;
+            font-size: 24px;
+            text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            color: #ffffff;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: #f9f9f9;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.05);
+            border-radius: 5px;
+        }
+
+        input[type="text"] {
+            width: calc(100% - 20px);
+            padding: 10px;
+            border: 2px solid #ccc;
+            margin-bottom: 10px;
+            background: #ffffff;
+            box-shadow: inset 1px 1px 3px rgba(0, 0, 0, 0.1);
+            border-radius: 5px;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            background-color: #25D366;
+            color: white;
+            border: 1px solid #1c9049;
+            box-shadow: 0 4px #1c9049;
+            cursor: pointer;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        button:active {
+            box-shadow: none;
+            transform: translateY(4px);
+        }
+
+        .messages::-webkit-scrollbar {
+            width: 12px;
+        }
+
+        .messages::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        .messages::-webkit-scrollbar-thumb {
+            background: #888;
+        }
+
+        .messages::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        .message {
+            color: black;
+            background-color: #f0f0f0;
+            padding: 5px;
+            border-radius: 5px;
+            margin: 5px 0;
+            position: relative;
+            transition: transform 0.3s;
+        }
+
+        .incoming-message {
+            background-color: #ffcccc; /* Kırmızı ton */
+        }
+
+        .game-logo {
+            max-width: 100%;
+            max-height: 80%;
+            margin-top: 20px;
+        }
+
+        .user-list {
+            margin-bottom: 10px;
+            max-height: 150px;
+            overflow-y: auto;
+            border: 2px solid #000000;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            padding: 5px;
+        }
+
+        .user {
+            cursor: pointer;
+            padding: 5px;
+            border-bottom: 1px solid #ddd;
+            transition: background-color 0.3s;
+            color: black;
+        }
+
+        .user:hover {
+            background-color: #e0e0e0;
+        }
+
+        .active-user {
+            background-color: #cccccc;
+        }
+
+        .new-message {
+            background-color: #ccffd7; /* Kullanıcı listesindeki yeni mesaj için arka plan rengi */
+        }
+
+        @media (max-width: 768px) {
+            body {
+                background-color: black;
+            }
+
+            .container {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h2>Online Kullanıcılar</h2>
+            <div id="user-list" class="user-list"></div>
+            <h2>Mesaj Yaz</h2>
+            <div id="chat-messages" class="messages"></div>
+            <input id="username-input" type="text" placeholder="Kullanıcı adınızı yazın" autofocus>
+            <input id="message-input" type="text" placeholder="Mesajınızı yazın">
+            <button onclick="sendMessage()">Gönder</button>
+        </div>
+
+        <div class="games">
+            <img src="https://i.ibb.co/Lr03rdd/Ads-z.png" alt="Game Logo" class="game-logo">
+        </div>
+    </div>
+
+    <script>
+        const ws = new WebSocket('ws://localhost:8000');
+
+        let username;
+        let recipient;
+
+        document.getElementById('username-input').addEventListener('keyup', function(event) {
+            if (event.key === 'Enter') {
+                username = this.value;
+                ws.send(JSON.stringify({ type: 'setUsername', username: username }));
+                this.disabled = true;
+                document.getElementById('message-input').focus();
+            }
+        });
+
+        const chatMessages = document.getElementById('chat-messages');
+        const userList = document.getElementById('user-list');
+
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+
+            if (data.type === 'message') {
+                const message = document.createElement('div');
+                message.className = 'message';
+                message.textContent = `${data.username}: ${data.content}`;
+
+                // Eğer mesaj farklı bir kullanıcıdan geldiyse ve şu anda o kullanıcı ile sohbet etmiyorsak, mesajın arka planını kırmızı yap
+                if (data.username !== username) {
+                    if (recipient !== data.username) {
+                        message.classList.add('incoming-message');
+                        // Kullanıcı listesinde ilgili kullanıcının üzerinde ışık göster
+                        const userDivs = userList.getElementsByClassName('user');
+                        for (let userDiv of userDivs) {
+                            if (userDiv.textContent === data.username) {
+                                userDiv.classList.add('new-message');
+                            }
+                        }
+                    }
+                }
+
+                // Mesajı silme işlemi
+                message.ondblclick = function() {
+                    message.style.transform = 'translateX(-100%)';
+                    setTimeout(() => {
+                        chatMessages.removeChild(message);
+                        ws.send(JSON.stringify({ type: 'deleteMessage', message_id: message.id })); // Mesajı sil
+                    }, 300); // Sola kaydırma süresi
+                };
+
+                chatMessages.appendChild(message);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            } else if (data.type === 'userList') {
+                // Kullanıcı listesini güncelle
+                updateUserList(data.users);
+            } else if (data.type === 'chatHistory') {
+                chatMessages.innerHTML = '';
+                data.messages.forEach(msg => {
+                    const message = document.createElement('div');
+                    message.className = 'message';
+                    message.textContent = `${msg.username}: ${msg.content}`;
+                    chatMessages.appendChild(message);
+                });
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+        };
+
+        function updateUserList(users) {
+            userList.innerHTML = '';
+            users.forEach(user => {
+                const userDiv = document.createElement('div');
+                userDiv.className = 'user';
+                userDiv.textContent = user;
+                userDiv.onclick = () => selectRecipient(user);
+                userList.appendChild(userDiv);
+            });
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('message-input');
+            const message = input.value;
+            if (message.trim() !== "" && username && recipient) {
+                ws.send(JSON.stringify({ type: 'message', to: recipient, content: message }));
+                const sentMessage = document.createElement('div');
+                sentMessage.className = 'message';
+                sentMessage.textContent = `${username}: ${message}`;
+                chatMessages.appendChild(sentMessage);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                input.value = '';
+            }
+        }
+
+        function selectRecipient(user) {
+            recipient = user;
+            const userDivs = userList.getElementsByClassName('user');
+            for (let userDiv of userDivs) {
+                userDiv.classList.remove('active-user');
+            }
+            const activeUserDiv = Array.from(userDivs).find(div => div.textContent === recipient);
+            if (activeUserDiv) {
+                activeUserDiv.classList.add('active-user');
+            }
+
+            // Seçilen kullanıcıyla sohbet geçmişini getir
+            ws.send(JSON.stringify({ type: 'getChatHistory', username: username, to: recipient })); // 'to' burada gönderilmeli
+        }
+    </script>
+    
+</body>
+</html>
